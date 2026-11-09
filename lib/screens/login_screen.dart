@@ -8,40 +8,43 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-
-  final _formKey = GlobalKey<FormState>();
+final _formKey = GlobalKey<FormState>();
   final TextEditingController _userController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   bool _mostrarContrasena = false;
   String? _mensaje;
+  
+  // Variable de estado para controlar el color/estado del mensaje sin usar .validate() en el build
+  bool _esValido = false;
 
-@override
+  @override
   void dispose() {
     _userController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-void _handleLogin() {
+  void _handleLogin() {
     if (_formKey.currentState!.validate()) {
       final String usuario = _userController.text.trim();
-      final String password = _passwordController.text;
 
-      //lógica temporal para simular el envío del formulario*
+      //lógica temporal para simular el envío del formulario
       setState(() {
+        _esValido = true;
         _mensaje = 'Formulario validado con éxito para el usuario: $usuario';
       });
       
-      //aquí se conectará posteriormente con la lógica de autenticación del backend (Task 1.4)*
+      // aquí conectar después con lógica de autenticación del backend(Task 1.4)
     } else {
       setState(() {
+        _esValido = false;
         _mensaje = 'Por favor complete todos los campos obligatorios.';
       });
     }
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F9),
@@ -181,7 +184,8 @@ void _handleLogin() {
                           _mensaje!,
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: _formKey.currentState?.validate() == true 
+                            // Usamos la variable _esValido en lugar de llamar a .validate() aquí[cite: 11]
+                            color: _esValido 
                                 ? Colors.green[700] 
                                 : const Color(0xFFB91C1C),
                             fontSize: 13,
