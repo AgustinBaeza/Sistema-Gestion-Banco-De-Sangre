@@ -1,20 +1,60 @@
 import 'package:flutter/material.dart';
 
+import '../basedatos/repositorio_usuario.dart';
+
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, required this.repo});
+
+  final RepositorioUsuario repo;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _controladorUsuario = TextEditingController();
+  final _controladorContrasena = TextEditingController();
+
   bool _mostrarContrasena = false;
+  bool _cargando = false;
   String? _mensaje;
 
-  void _mostrarAviso() {
+  @override
+  void dispose() {
+    _controladorUsuario.dispose();
+    _controladorContrasena.dispose();
+    super.dispose();
+  }
+
+  Future<void> _iniciarSesion() async {
+    final usuario = _controladorUsuario.text.trim();
+    final contrasena = _controladorContrasena.text;
+
     setState(() {
-      _mensaje = 'La autenticación todavía no está disponible.';
+      _cargando = true;
+      _mensaje = null;
     });
+
+    final usuarioValido = await Future.delayed(
+      const Duration(milliseconds: 50),
+      () => widget.repo.autenticar(usuario, contrasena),
+    );
+
+    setState(() => _cargando = false);
+
+    if (usuarioValido == null) {
+      setState(() {
+        _mensaje = 'Usuario o contraseña incorrectos.';
+      });
+      return;
+    }
+    // TODO: navegar según el rol (usuarioValido.rol), Cambiar else
+    else {
+      setState(() {
+        _mensaje = 'Bienvenido, ${usuarioValido.nombreUsuario}';
+      });
+    }
+    
   }
 
   @override
@@ -82,8 +122,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     const SizedBox(height: 24),
 
-                    const TextField(
-                      decoration: InputDecoration(
+                    TextField(
+                      controller: _controladorUsuario,
+                      enabled: !_cargando,
+                      decoration: const InputDecoration(
                         labelText: 'Usuario',
                         prefixIcon: Icon(Icons.person_outline),
                         border: OutlineInputBorder(),
@@ -93,7 +135,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 16),
 
                     TextField(
+                      controller: _controladorContrasena,
                       obscureText: !_mostrarContrasena,
+                      enabled: !_cargando,
+                      onSubmitted: (_) => _cargando ? null : _iniciarSesion(),
                       decoration: InputDecoration(
                         labelText: 'Contraseña',
                         prefixIcon: const Icon(Icons.lock_outline),
@@ -119,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
-                        onPressed: _mostrarAviso,
+                        onPressed: _cargando ? null : _iniciarSesion,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFB91C1C),
                           foregroundColor: Colors.white,
@@ -127,10 +172,19 @@ class _LoginScreenState extends State<LoginScreen> {
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        child: const Text(
-                          'Iniciar sesión',
-                          style: TextStyle(fontSize: 16),
-                        ),
+                        child: _cargando
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Iniciar sesión',
+                                style: TextStyle(fontSize: 16),
+                              ),
                       ),
                     ),
 
