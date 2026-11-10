@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../basedatos/repositorio_usuario.dart';
+
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, required this.repo});
+
+  final RepositorioUsuario repo;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -28,14 +32,24 @@ final _formKey = GlobalKey<FormState>();
   void _handleLogin() {
     if (_formKey.currentState!.validate()) {
       final String usuario = _userController.text.trim();
+      final String contrasena = _passwordController.text;
 
-      //lógica temporal para simular el envío del formulario
-      setState(() {
-        _esValido = true;
-        _mensaje = 'Formulario validado con éxito para el usuario: $usuario';
-      });
-      
-      // aquí conectar después con lógica de autenticación del backend(Task 1.4)
+      final usuarioAutenticado = widget.repo.autenticar(usuario, contrasena);
+
+      if (usuarioAutenticado != null) {
+        setState(() {
+          _esValido = true;
+          _mensaje =
+              'Bienvenido, ${usuarioAutenticado.nombreUsuario} '
+              '(${usuarioAutenticado.rol.name})';
+        });
+        // Todo: Navegar a la siguiente pantalla o realizar otras acciones después del inicio de sesión exitoso
+      } else {
+        setState(() {
+          _esValido = false;
+          _mensaje = 'Usuario o contraseña incorrectos.';
+        });
+      }
     } else {
       setState(() {
         _esValido = false;
