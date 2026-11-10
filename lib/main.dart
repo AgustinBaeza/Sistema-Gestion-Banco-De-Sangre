@@ -2,7 +2,6 @@ import "package:flutter/material.dart";
 import "basedatos/conexion.dart";
 import "basedatos/repositorio_bolsa.dart";
 import "basedatos/repositorio_usuario.dart";
-import "pantallas/formulario_bolsa.dart";
 import "screens/login_screen.dart";
  
 final repoUsuario = RepositorioUsuario();
@@ -26,14 +25,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: "Gestion y Movilizacion de Sangre",
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        // Mismo rojo que el login y el boton "Guardar bolsa"
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB91C1C)),
       ),
-      home: const LoginScreen(),
-      routes: {
-        // Temporal: mientras el login no autentica, se entra con /#/bolsas.
-        "/bolsas": (_) => FormularioBolsaPage(repo: repoBolsa),
-      },
+      home: LoginScreen(repo: repoUsuario, repoBolsa: repoBolsa),
     );
   }
 }

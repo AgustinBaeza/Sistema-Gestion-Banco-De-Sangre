@@ -1,22 +1,68 @@
 import 'package:flutter/material.dart';
-
+ 
+import '../basedatos/repositorio_bolsa.dart';
+import '../basedatos/repositorio_usuario.dart';
+import '../pantallas/formulario_bolsa.dart';
+ 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
-
+  const LoginScreen({super.key, required this.repo, required this.repoBolsa});
+ 
+  final RepositorioUsuario repo;
+  final RepositorioBolsa repoBolsa;
+ 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
-
+ 
 class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _userController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+ 
   bool _mostrarContrasena = false;
   String? _mensaje;
-
-  void _mostrarAviso() {
-    setState(() {
-      _mensaje = 'La autenticación todavía no está disponible.';
-    });
+ 
+  // Controla el color del mensaje sin llamar a .validate() en el build
+  bool _esValido = false;
+ 
+  @override
+  void dispose() {
+    _userController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
-
+ 
+  void _handleLogin() {
+    if (!_formKey.currentState!.validate()) {
+      setState(() {
+        _esValido = false;
+        _mensaje = 'Por favor complete todos los campos obligatorios.';
+      });
+      return;
+    }
+ 
+    final String usuario = _userController.text.trim();
+    final String contrasena = _passwordController.text;
+ 
+    final usuarioAutenticado = widget.repo.autenticar(usuario, contrasena);
+ 
+    if (usuarioAutenticado == null) {
+      setState(() {
+        _esValido = false;
+        _mensaje = 'Usuario o contraseña incorrectos.';
+      });
+      return;
+    }
+ 
+    // US 2 / Tarea 2.2: despues del login se pasa al formulario de ingreso.
+    // pushReplacement para que el boton "atras" no vuelva al login.
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => FormularioBolsaPage(repo: widget.repoBolsa),
+      ),
+    );
+  }
+ 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -34,126 +80,133 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: Padding(
                 padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircleAvatar(
-                      radius: 38,
-                      backgroundColor: Color(0xFFFDE8E8),
-                      child: Icon(
-                        Icons.bloodtype,
-                        size: 44,
-                        color: Color(0xFFB91C1C),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    const Text(
-                      'Banco de Sangre',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    const Text(
-                      'Sistema de Gestión de Unidades de Sangre',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
-                    ),
-
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    const SizedBox(height: 20),
-
-                    const Text(
-                      'Acceso al sistema',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF334155),
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    const TextField(
-                      decoration: InputDecoration(
-                        labelText: 'Usuario',
-                        prefixIcon: Icon(Icons.person_outline),
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    TextField(
-                      obscureText: !_mostrarContrasena,
-                      decoration: InputDecoration(
-                        labelText: 'Contraseña',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _mostrarContrasena
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _mostrarContrasena = !_mostrarContrasena;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _mostrarAviso,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFB91C1C),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: const Text(
-                          'Iniciar sesión',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                      ),
-                    ),
-
-                    if (_mensaje != null) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        _mensaje!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircleAvatar(
+                        radius: 38,
+                        backgroundColor: Color(0xFFFDE8E8),
+                        child: Icon(
+                          Icons.bloodtype,
+                          size: 44,
                           color: Color(0xFFB91C1C),
-                          fontSize: 13,
                         ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Banco de Sangre',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Sistema de Gestión de Unidades de Sangre',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+                      ),
+                      const SizedBox(height: 24),
+                      const Divider(),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Acceso al sistema',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF334155),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      TextFormField(
+                        controller: _userController,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: 'Usuario',
+                          prefixIcon: Icon(Icons.person_outline),
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'El usuario es obligatorio';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: !_mostrarContrasena,
+                        // Enter en el navegador tambien inicia sesion
+                        onFieldSubmitted: (_) => _handleLogin(),
+                        decoration: InputDecoration(
+                          labelText: 'Contraseña',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _mostrarContrasena
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _mostrarContrasena = !_mostrarContrasena;
+                              });
+                            },
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'La contraseña es obligatoria';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _handleLogin,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFB91C1C),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text(
+                            'Iniciar sesión',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                        ),
+                      ),
+                      if (_mensaje != null) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          _mensaje!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _esValido
+                                ? Colors.green[700]
+                                : const Color(0xFFB91C1C),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Acceso exclusivo para personal autorizado',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                       ),
                     ],
-
-                    const SizedBox(height: 24),
-
-                    const Text(
-                      'Acceso exclusivo para personal autorizado',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
