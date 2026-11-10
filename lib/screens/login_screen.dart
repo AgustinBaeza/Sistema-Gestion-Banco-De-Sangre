@@ -1,14 +1,12 @@
+
 import 'package:flutter/material.dart';
  
-import '../basedatos/repositorio_bolsa.dart';
 import '../basedatos/repositorio_usuario.dart';
-import '../pantallas/formulario_bolsa.dart';
  
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.repo, required this.repoBolsa});
+  const LoginScreen({super.key, required this.repo});
  
   final RepositorioUsuario repo;
-  final RepositorioBolsa repoBolsa;
  
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -55,12 +53,9 @@ class _LoginScreenState extends State<LoginScreen> {
     }
  
     // US 2 / Tarea 2.2: despues del login se pasa al formulario de ingreso.
-    // pushReplacement para que el boton "atras" no vuelva al login.
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => FormularioBolsaPage(repo: widget.repoBolsa),
-      ),
-    );
+    // pushReplacementNamed para que el boton "atras" no vuelva al login
+    // y la URL del navegador cambie a /#/bolsas
+    Navigator.of(context).pushReplacementNamed("/bolsas");
   }
  
   @override
@@ -216,3 +211,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+ 
