@@ -1,10 +1,12 @@
 
+
 import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "basedatos/conexion.dart";
 import "basedatos/repositorio_bolsa.dart";
 import "basedatos/repositorio_usuario.dart";
 import "pantallas/formulario_bolsa.dart";
+import "pantallas/inventario.dart";
 import "screens/login_screen.dart";
  
 final repoUsuario = RepositorioUsuario();
@@ -31,6 +33,13 @@ Route<void> generarRuta(RouteSettings settings) {
     return MaterialPageRoute(
       settings: settings,
       builder: (_) => FormularioBolsaPage(repo: repoBolsa),
+    );
+  }
+  // vista del inventario por ahora solo en debug
+  if (settings.name == "/inventario" && kDebugMode) {
+    return MaterialPageRoute(
+      settings: settings,
+      builder: (_) => InventarioPage(filas: inventarioEjemplo),
     );
   }
   return MaterialPageRoute(
