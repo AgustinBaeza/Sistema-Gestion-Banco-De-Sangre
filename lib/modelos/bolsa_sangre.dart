@@ -48,23 +48,26 @@ class BolsaSangre {
   final int id;
   final String codigo;
   final TipoSanguineo tipo;
+  final String sede;
   final int volumenMl;
   final DateTime fechaIngreso;
   final DateTime fechaVencimiento;
- 
+
   BolsaSangre({
     required this.id,
     required this.codigo,
     required this.tipo,
+    required this.sede,
     required this.volumenMl,
     required this.fechaIngreso,
     required this.fechaVencimiento,
   });
- 
+
   factory BolsaSangre.fromMap(Map m) => BolsaSangre(
     id: m["id"] as int,
     codigo: m["codigo"] as String,
     tipo: TipoSanguineo.values.byName(m["tipo_sanguineo"] as String),
+    sede: m["sede"] as String,
     volumenMl: m["volumen_ml"] as int,
     fechaIngreso: DateTime.parse(m["fecha_ingreso"] as String),
     fechaVencimiento: DateTime.parse(m["fecha_vencimiento"] as String),
