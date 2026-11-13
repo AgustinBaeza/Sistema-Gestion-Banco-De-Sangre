@@ -17,6 +17,7 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
  
   final _formKey = GlobalKey<FormState>();
   final _codigoCtrl = TextEditingController();
+  final _sedeCtrl = TextEditingController();
   final _volumenCtrl = TextEditingController();
   final _ingresoCtrl = TextEditingController();
   final _vencimientoCtrl = TextEditingController();
@@ -31,6 +32,7 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
   @override
   void dispose() {
     _codigoCtrl.dispose();
+    _sedeCtrl.dispose();
     _volumenCtrl.dispose();
     _ingresoCtrl.dispose();
     _vencimientoCtrl.dispose();
@@ -129,6 +131,7 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
  
   void _limpiar() {
     _codigoCtrl.clear();
+    _sedeCtrl.clear();
     _volumenCtrl.clear();
     _ingresoCtrl.clear();
     _vencimientoCtrl.clear();
@@ -151,6 +154,7 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
       final bolsa = await widget.repo.crear(
         codigo: _codigoCtrl.text,
         tipo: _tipo!,
+        sede: _sedeCtrl.text,
         volumenMl: int.parse(_volumenCtrl.text),
         fechaIngreso: _ingreso!,
         fechaVencimiento: _vencimiento!,
@@ -252,6 +256,23 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
                             validator: (t) => t == null
                                 ? "Selecciona un tipo sanguineo"
                                 : null,
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _sedeCtrl,
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: const InputDecoration(
+                              labelText: "Sede *",
+                              hintText: "Ej: Concepcion",
+                              border: OutlineInputBorder(),
+                            ),
+                            validator: (v) {
+                              final t = (v ?? "").trim();
+                              if (t.isEmpty) {
+                                return "La sede es obligatoria";
+                              }
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 16),
                           TextFormField(

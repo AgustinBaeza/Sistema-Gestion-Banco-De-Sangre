@@ -1,16 +1,7 @@
 import "package:flutter/material.dart";
 import "../modelos/bolsa_sangre.dart";
 import "../modelos/stock_sede.dart";
- 
-/// Datos de ejemplo para ver el diseño; se borran en la tarea 3.3
-final inventarioEjemplo = [
-  StockSede(sede: "Concepcion", tipoSanguineo: "oPositivo", cantidad: 14),
-  StockSede(sede: "Concepcion", tipoSanguineo: "aPositivo", cantidad: 9),
-  StockSede(sede: "Concepcion2", tipoSanguineo: "oPositivo", cantidad: 8),
-  StockSede(sede: "Concepcion2", tipoSanguineo: "oNegativo", cantidad: 2),
-  StockSede(sede: "Concepcion3", tipoSanguineo: "bPositivo", cantidad: 5),
-];
- 
+
 class InventarioPage extends StatelessWidget {
   final List<StockSede> filas;
  
