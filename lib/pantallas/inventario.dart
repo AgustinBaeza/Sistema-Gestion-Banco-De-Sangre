@@ -1,26 +1,18 @@
 import "package:flutter/material.dart";
 import "../modelos/bolsa_sangre.dart";
- 
-/// Unidades de un tipo sanguineo en una sede (los datos reales vienen en la 3.3)
-class FilaInventario {
-  final String sede;
-  final TipoSanguineo tipo;
-  final int unidades;
- 
-  const FilaInventario(this.sede, this.tipo, this.unidades);
-}
+import "../modelos/stock_sede.dart";
  
 /// Datos de ejemplo para ver el diseño; se borran en la tarea 3.3
-const inventarioEjemplo = [
-  FilaInventario("Concepcion", TipoSanguineo.oPositivo, 14),
-  FilaInventario("Concepcion", TipoSanguineo.aPositivo, 9),
-  FilaInventario("Concepcion2", TipoSanguineo.oPositivo, 8),
-  FilaInventario("Concepcion2", TipoSanguineo.oNegativo, 2),
-  FilaInventario("Concepcion3", TipoSanguineo.bPositivo, 5),
+final inventarioEjemplo = [
+  StockSede(sede: "Concepcion", tipoSanguineo: "oPositivo", cantidad: 14),
+  StockSede(sede: "Concepcion", tipoSanguineo: "aPositivo", cantidad: 9),
+  StockSede(sede: "Concepcion2", tipoSanguineo: "oPositivo", cantidad: 8),
+  StockSede(sede: "Concepcion2", tipoSanguineo: "oNegativo", cantidad: 2),
+  StockSede(sede: "Concepcion3", tipoSanguineo: "bPositivo", cantidad: 5),
 ];
  
 class InventarioPage extends StatelessWidget {
-  final List<FilaInventario> filas;
+  final List<StockSede> filas;
  
   const InventarioPage({super.key, required this.filas});
  
@@ -28,9 +20,12 @@ class InventarioPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final sedes = {for (final f in filas) f.sede}.toList()..sort();
  
-    int unidades(TipoSanguineo t, String sede) => filas
-        .where((f) => f.tipo == t && f.sede == sede)
-        .fold(0, (suma, f) => suma + f.unidades);
+    // Acepta el tipo guardado como "oNegativo" o como "O-"
+    int cantidad(TipoSanguineo t, String sede) => filas
+        .where((f) =>
+            f.sede == sede &&
+            (f.tipoSanguineo == t.name || f.tipoSanguineo == t.etiqueta))
+        .fold(0, (suma, f) => suma + f.cantidad);
  
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F9),
@@ -43,7 +38,7 @@ class InventarioPage extends StatelessWidget {
             child: filas.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.all(32),
-                    child: Text("No hay unidades registradas"),
+                    child: Text("No hay unidades disponibles"),
                   )
                 : SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -60,10 +55,10 @@ class InventarioPage extends StatelessWidget {
                             cells: [
                               DataCell(Text(t.etiqueta)),
                               for (final s in sedes)
-                                DataCell(Text("${unidades(t, s)}")),
+                                DataCell(Text("${cantidad(t, s)}")),
                               DataCell(
                                 Text(
-                                  "${sedes.fold(0, (suma, s) => suma + unidades(t, s))}",
+                                  "${sedes.fold(0, (suma, s) => suma + cantidad(t, s))}",
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -80,4 +75,3 @@ class InventarioPage extends StatelessWidget {
     );
   }
 }
- 

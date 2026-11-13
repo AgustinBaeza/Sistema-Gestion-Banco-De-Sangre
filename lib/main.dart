@@ -1,3 +1,5 @@
+
+
 import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "basedatos/conexion.dart";
@@ -33,11 +35,11 @@ Route<void> generarRuta(RouteSettings settings) {
       builder: (_) => FormularioBolsaPage(repo: repoBolsa),
     );
   }
-  // US 3 / Tarea 3.1: vista del inventario. Por ahora solo en debug
+  // vista del inventario por ahora solo en debug
   if (settings.name == "/inventario" && kDebugMode) {
     return MaterialPageRoute(
       settings: settings,
-      builder: (_) => const InventarioPage(filas: inventarioEjemplo),
+      builder: (_) => InventarioPage(filas: inventarioEjemplo),
     );
   }
   return MaterialPageRoute(
