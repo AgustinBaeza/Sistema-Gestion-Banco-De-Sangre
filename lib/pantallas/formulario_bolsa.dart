@@ -2,33 +2,33 @@ import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "../basedatos/repositorio_bolsa.dart";
 import "../modelos/bolsa_sangre.dart";
- 
+
 class FormularioBolsaPage extends StatefulWidget {
   final RepositorioBolsa repo;
- 
+
   const FormularioBolsaPage({super.key, required this.repo});
- 
+
   @override
   State<FormularioBolsaPage> createState() => _FormularioBolsaPageState();
 }
- 
+
 class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
   static const _rojo = Color(0xFFB91C1C);
- 
+
   final _formKey = GlobalKey<FormState>();
   final _codigoCtrl = TextEditingController();
   final _sedeCtrl = TextEditingController();
   final _volumenCtrl = TextEditingController();
   final _ingresoCtrl = TextEditingController();
   final _vencimientoCtrl = TextEditingController();
- 
+
   TipoSanguineo? _tipo;
   DateTime? _ingreso;
   DateTime? _vencimiento;
- 
+
   /// Si el usuario eligio el vencimiento a mano ya no se recalcula solo
   bool _vencimientoEditado = false;
- 
+
   @override
   void dispose() {
     _codigoCtrl.dispose();
@@ -38,21 +38,21 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
     _vencimientoCtrl.dispose();
     super.dispose();
   }
- 
+
   /// Ultimo vencimiento posible: ingreso + vida util (informe, RF-02)
   DateTime _vencimientoMaximo(DateTime ingreso) =>
       sumarDias(ingreso, BolsaSangre.vidaUtilDias);
- 
+
   bool _vencimientoValido(DateTime v, DateTime ingreso) =>
       v.isAfter(ingreso) &&
       v.isAfter(fechaHoy()) &&
       !v.isAfter(_vencimientoMaximo(ingreso));
- 
+
   void _ponerVencimiento(DateTime v) {
     _vencimiento = v;
     _vencimientoCtrl.text = formatearFecha(v);
   }
- 
+
   Future<void> _elegirIngreso() async {
     final hoy = fechaHoy();
     final elegida = await showDatePicker(
@@ -78,7 +78,7 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
       }
     });
   }
- 
+
   Future<void> _elegirVencimiento() async {
     final ingreso = _ingreso;
     if (ingreso == null) {
@@ -104,7 +104,7 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
       _vencimientoEditado = true;
     });
   }
- 
+
   String? _validarVencimiento(String? _) {
     final v = _vencimiento;
     if (v == null) return "Selecciona la fecha de vencimiento";
@@ -118,7 +118,7 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
     }
     return null;
   }
- 
+
   void _mensaje(String texto, {bool error = false}) {
     final colores = Theme.of(context).colorScheme;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -128,7 +128,7 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
       ),
     );
   }
- 
+
   void _limpiar() {
     _codigoCtrl.clear();
     _sedeCtrl.clear();
@@ -143,13 +143,13 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
       _vencimientoEditado = false;
     });
   }
- 
+
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) {
       _mensaje("Revisa los campos marcados antes de guardar", error: true);
       return;
     }
- 
+
     try {
       final bolsa = await widget.repo.crear(
         codigo: _codigoCtrl.text,
@@ -172,14 +172,26 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
       _mensaje(e.message.toString(), error: true);
     }
   }
- 
+
   @override
   Widget build(BuildContext context) {
     final texto = Theme.of(context).textTheme;
- 
+
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F9),
-      appBar: AppBar(title: const Text("Ingreso de bolsa de sangre")),
+      appBar: AppBar(
+        title: const Text("Ingreso de bolsa de sangre"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.inventory_2_outlined),
+            tooltip: "Ver inventario",
+            onPressed: () {
+              Navigator.of(context).pushNamed("/inventario");
+            },
+          ),
+        ],
+      ),
+
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -372,4 +384,3 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
     );
   }
 }
- 
