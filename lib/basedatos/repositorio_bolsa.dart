@@ -2,18 +2,18 @@ import "package:sqlite3/common.dart";
 import "../modelos/bolsa_sangre.dart";
 import "../modelos/stock_sede.dart";
 import "conexion.dart";
- 
+
 class RepositorioBolsa {
   static const _sqliteConstraintUnique = 2067;
- 
+
   late final CommonDatabase _db;
- 
+
   /// Recibe una base de datos ya abierta y crea la tabla si no existe
   void init(CommonDatabase db) {
     _db = db;
- 
+
     final tipos = TipoSanguineo.values.map((t) => "'${t.name}'").join(", ");
- 
+
     _db.execute("""
       CREATE TABLE IF NOT EXISTS bolsas_sangre (
         id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,21 +21,48 @@ class RepositorioBolsa {
         tipo_sanguineo    TEXT NOT NULL CHECK (tipo_sanguineo IN ($tipos)),
         sede              TEXT NOT NULL,
         volumen_ml        INTEGER NOT NULL CHECK (volumen_ml > 0),
-        fecha_ingreso     TEXT NOT NULL,
-        fecha_vencimiento TEXT NOT NULL CHECK (fecha_vencimiento > fecha_ingreso)
-      )
+        fecha_ingreso TEXT NOT NULL,
+        fecha_vencimiento TEXT NOT NULL
+          CHECK (fecha_vencimiento > fecha_ingreso),
+
+        estado TEXT NOT NULL DEFAULT 'DISPONIBLE'
+          CHECK (estado IN (
+            'DISPONIBLE', 'RETIRADA',
+            'EN_TRANSITO', 'EN_REVISION'
+          )),
+
+        motivo_retiro TEXT,
+        fecha_retiro TEXT
+        )
     """);
 
     // Migracion: las bases creadas antes de la sede no tienen la columna, idealmente eliminar la migracion cuando ya no haya bases de datos antiguas
     final columnas = _db.select("PRAGMA table_info(bolsas_sangre)");
-    if (!columnas.any((c) => c["name"] == "sede")) {
+
+    if (!columnas.any((c) => c["name"] == "estado")) {
       _db.execute(
         "ALTER TABLE bolsas_sangre "
-        "ADD COLUMN sede TEXT NOT NULL DEFAULT 'Desconocida'",
+        "ADD COLUMN estado TEXT NOT NULL DEFAULT 'DISPONIBLE' "
+        "CHECK (estado IN ('DISPONIBLE', 'RETIRADA', "
+        "'EN_TRANSITO', 'EN_REVISION'))",
+      );
+    }
+
+    if (!columnas.any((c) => c["name"] == "motivo_retiro")) {
+      _db.execute(
+        "ALTER TABLE bolsas_sangre "
+        "ADD COLUMN motivo_retiro TEXT",
+      );
+    }
+
+    if (!columnas.any((c) => c["name"] == "fecha_retiro")) {
+      _db.execute(
+        "ALTER TABLE bolsas_sangre "
+        "ADD COLUMN fecha_retiro TEXT",
       );
     }
   }
- 
+
   Future<BolsaSangre> crear({
     required String codigo,
     required TipoSanguineo tipo,
@@ -84,14 +111,21 @@ class RepositorioBolsa {
         "desde el ingreso",
       );
     }
- 
+
     try {
       _db.execute(
         "INSERT INTO bolsas_sangre "
         "(codigo, tipo_sanguineo, sede, volumen_ml, fecha_ingreso, "
         "fecha_vencimiento) "
         "VALUES (?, ?, ?, ?, ?, ?)",
-        [clave, tipo.name, sedeLimpia, volumenMl, fechaIso(ingreso), fechaIso(vence)],
+        [
+          clave,
+          tipo.name,
+          sedeLimpia,
+          volumenMl,
+          fechaIso(ingreso),
+          fechaIso(vence),
+        ],
       );
     } on SqliteException catch (e) {
       if (e.extendedResultCode == _sqliteConstraintUnique) {
@@ -99,13 +133,13 @@ class RepositorioBolsa {
       }
       rethrow;
     }
- 
+
     // Se lee antes del await para no mezclarlo con otro insert
     final id = _db.lastInsertRowId;
- 
+
     // En web baja los cambios a IndexedDB; en escritorio no hace nada
     await persistir();
- 
+
     return BolsaSangre(
       id: id,
       codigo: clave,
@@ -120,7 +154,8 @@ class RepositorioBolsa {
   List<BolsaSangre> listar() {
     final filas = _db.select(
       "SELECT id, codigo, tipo_sanguineo, sede, volumen_ml, "
-      "fecha_ingreso, fecha_vencimiento "
+      "fecha_ingreso, fecha_vencimiento, estado, "
+      "motivo_retiro, fecha_retiro "
       "FROM bolsas_sangre ORDER BY id DESC",
     );
     return filas.map((f) => BolsaSangre.fromMap(f)).toList();
@@ -133,7 +168,7 @@ class RepositorioBolsa {
       "SELECT sede, tipo_sanguineo, "
       "CAST(COUNT(id) AS INTEGER) AS cantidad "
       "FROM bolsas_sangre "
-      "WHERE fecha_vencimiento > ? "
+      "WHERE fecha_vencimiento > ? AND estado = 'DISPONIBLE'"
       "GROUP BY sede, tipo_sanguineo "
       "ORDER BY sede, tipo_sanguineo",
       [fechaIso(fechaHoy())],
