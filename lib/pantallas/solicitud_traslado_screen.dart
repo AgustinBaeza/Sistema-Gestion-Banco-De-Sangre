@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../modelos/bolsa_sangre.dart';
 
 class DatosSolicitudTraslado {
   final String sedeOrigen;
   final String sedeDestino;
-  final String tipoSanguineo;
+  final TipoSanguineo tipoSanguineo;
   final int cantidad;
   final int stockMinimo;
   final int stockOptimo;
@@ -24,7 +25,6 @@ class DatosSolicitudTraslado {
     this.notificacionEnviada = true,
   });
 
-  /// Excedente por encima del stock mínimo y óptimo para orientar la solicitud
   int get excedenteSobreMinimo =>
       (stockDisponibleOrigen - stockMinimo).clamp(0, stockDisponibleOrigen);
 
@@ -32,56 +32,46 @@ class DatosSolicitudTraslado {
       (stockDisponibleOrigen - stockOptimo).clamp(0, stockDisponibleOrigen);
 }
 
-class SolicitudTrasladoScreen extends StatefulWidget {
-  const SolicitudTrasladoScreen({
+class SolicitudTrasladoPage extends StatefulWidget {
+  const SolicitudTrasladoPage({
     super.key,
     this.sedesDisponibles = const [
       'Sede Central',
       'Sede Norte',
       'Sede Sur',
-      'Sede Clínica Regional',
+      'Concepcion',
     ],
-    this.tiposSanguineos = const [
-      'O+',
-      'O-',
-      'A+',
-      'A-',
-      'B+',
-      'B-',
-      'AB+',
-      'AB-',
-    ],
+    this.tiposSanguineos = TipoSanguineo.values,
     this.stockActualPorSedeYTipo = const {},
     this.onEnviarSolicitud,
   });
 
   final List<String> sedesDisponibles;
-  final List<String> tiposSanguineos;
+  final List<TipoSanguineo> tiposSanguineos;
 
-  /// Mapa opcional: "sede|tipo" -> cantidad disponible actual (útil para integrar con StockSede)
+  /// Clave sugerida: "$sede|${tipo.name}" o "$sede|${tipo.etiqueta}"
   final Map<String, int> stockActualPorSedeYTipo;
 
-  /// Callback para conectar la Task 7.2 (validación en backend/BD y notificación)
   final Future<String?> Function(DatosSolicitudTraslado datos)?
       onEnviarSolicitud;
 
   @override
-  State<SolicitudTrasladoScreen> createState() =>
-      _SolicitudTrasladoScreenState();
+  State<SolicitudTrasladoPage> createState() => _SolicitudTrasladoPageState();
 }
 
-class _SolicitudTrasladoScreenState extends State<SolicitudTrasladoScreen> {
+class _SolicitudTrasladoPageState extends State<SolicitudTrasladoPage> {
+  static const _rojo = Color(0xFFB91C1C);
+
   final _formKey = GlobalKey<FormState>();
-  final _cantidadController = TextEditingController();
+  final _cantidadCtrl = TextEditingController();
 
   late String _sedeDestino;
   late String _sedeOrigen;
-  late String _tipoSanguineo;
+  late TipoSanguineo _tipoSanguineo;
 
-  // Parámetros base de referencia para cálculo de stock mínimo, óptimo y máximo
-  int _stockMinimo = 5;
-  int _stockOptimo = 12;
-  int _stockMaximo = 20;
+  int _stockMinimo = 4;
+  int _stockOptimo = 10;
+  int _stockMaximo = 16;
 
   bool _enviando = false;
   String? _mensajeEstado;
@@ -100,21 +90,22 @@ class _SolicitudTrasladoScreenState extends State<SolicitudTrasladoScreen> {
 
   @override
   void dispose() {
-    _cantidadController.dispose();
+    _cantidadCtrl.dispose();
     super.dispose();
   }
 
   void _recalcularNivelesReferencia() {
-    // Regla base clara: mínimo (4 para Rh- críticos, 6 para el resto), óptimo (2.5x mínimo) y máximo (4x mínimo)
-    final bool esCritico = _tipoSanguineo.endsWith('-');
-    final int baseMin = esCritico ? 4 : 6;
+    final bool esRhNegativo = _tipoSanguineo.name.endsWith('Negativo');
+    final int baseMin = esRhNegativo ? 4 : 6;
     _stockMinimo = baseMin;
     _stockOptimo = (baseMin * 2.5).round();
     _stockMaximo = baseMin * 4;
   }
 
   int _obtenerStockSede(String sede) {
-    return widget.stockActualPorSedeYTipo['$sede|$_tipoSanguineo'] ?? 0;
+    return widget.stockActualPorSedeYTipo['$sede|${_tipoSanguineo.name}'] ??
+        widget.stockActualPorSedeYTipo['$sede|${_tipoSanguineo.etiqueta}'] ??
+        0;
   }
 
   Future<void> _onSubmit() async {
@@ -125,7 +116,7 @@ class _SolicitudTrasladoScreenState extends State<SolicitudTrasladoScreen> {
 
     if (!_formKey.currentState!.validate()) {
       setState(() {
-        _mensajeEstado = 'Revise los campos del formulario antes de enviar.';
+        _mensajeEstado = 'Revisa los campos marcados antes de enviar.';
         _esExito = false;
       });
       return;
@@ -140,7 +131,7 @@ class _SolicitudTrasladoScreenState extends State<SolicitudTrasladoScreen> {
       return;
     }
 
-    final int cantidad = int.parse(_cantidadController.text.trim());
+    final int cantidad = int.parse(_cantidadCtrl.text.trim());
     final int stockOrigen = _obtenerStockSede(_sedeOrigen);
     final int excedenteDisponible = (stockOrigen - _stockMinimo).clamp(
       0,
@@ -150,7 +141,8 @@ class _SolicitudTrasladoScreenState extends State<SolicitudTrasladoScreen> {
     if (cantidad > excedenteDisponible) {
       setState(() {
         _mensajeEstado =
-            'La sede $_sedeOrigen solo tiene $excedenteDisponible unidad(es) de excedente por encima del stock mínimo ($_stockMinimo).';
+            'La sede $_sedeOrigen solo tiene $excedenteDisponible unidad(es) '
+            'de excedente sobre el stock mínimo ($_stockMinimo).';
         _esExito = false;
       });
       return;
@@ -171,16 +163,16 @@ class _SolicitudTrasladoScreenState extends State<SolicitudTrasladoScreen> {
     setState(() => _enviando = true);
 
     try {
-      String? mensajeExterno;
-      if (widget.onEnviarSolicitud != null) {
-        mensajeExterno = await widget.onEnviarSolicitud!(datos);
-      }
+      final String? mensajeExterno = widget.onEnviarSolicitud != null
+          ? await widget.onEnviarSolicitud!(datos)
+          : null;
 
       if (!mounted) return;
       setState(() {
         _esExito = true;
         _mensajeEstado = mensajeExterno ??
-            'Solicitud creada: $cantidad unidad(es) de $_tipoSanguineo hacia $_sedeDestino. Se notificó a la sede de origen ($_sedeOrigen).';
+            'Solicitud creada: $cantidad unidad(es) de ${_tipoSanguineo.etiqueta} '
+                'hacia $_sedeDestino. Se notificó a la sede de origen ($_sedeOrigen).';
       });
     } catch (e) {
       if (!mounted) return;
@@ -189,9 +181,7 @@ class _SolicitudTrasladoScreenState extends State<SolicitudTrasladoScreen> {
         _mensajeEstado = 'No se pudo procesar la solicitud: $e';
       });
     } finally {
-      if (mounted) {
-        setState(() => _enviando = false);
-      }
+      if (mounted) setState(() => _enviando = false);
     }
   }
 
@@ -208,48 +198,40 @@ class _SolicitudTrasladoScreenState extends State<SolicitudTrasladoScreen> {
       backgroundColor: const Color(0xFFF3F5F9),
       appBar: AppBar(
         title: const Text('Solicitar traslado entre sedes'),
-        backgroundColor: const Color(0xFFB91C1C),
-        foregroundColor: Colors.white,
       ),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
+            constraints: const BoxConstraints(maxWidth: 560),
             child: Card(
               color: Colors.white,
-              elevation: 4,
+              elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(28),
                 child: Form(
                   key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        'Nueva solicitud de abastecimiento',
+                        'Nueva solicitud de traslado',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
                         ),
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'Complete los datos para solicitar unidades a otra sede ante escasez local.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF64748B),
-                        ),
+                        'Solicita unidades a otra sede ante escasez local.',
+                        style: TextStyle(fontSize: 13, color: Colors.black54),
                       ),
-                      const SizedBox(height: 20),
-
-                      // Resumen de niveles mínimo, óptimo y máximo
+                      const SizedBox(height: 18),
                       Container(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(12),
@@ -259,207 +241,153 @@ class _SolicitudTrasladoScreenState extends State<SolicitudTrasladoScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Umbrales de referencia ($_tipoSanguineo)',
+                              'Umbrales de referencia (${_tipoSanguineo.etiqueta})',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13,
-                                color: Color(0xFF334155),
                               ),
                             ),
                             const SizedBox(height: 8),
                             Wrap(
-                              spacing: 12,
+                              spacing: 10,
                               runSpacing: 8,
                               children: [
                                 _ChipNivel(
                                   etiqueta: 'Mínimo',
                                   valor: '$_stockMinimo',
-                                  color: const Color(0xFFB91C1C),
+                                  color: _rojo,
                                 ),
                                 _ChipNivel(
                                   etiqueta: 'Óptimo',
                                   valor: '$_stockOptimo',
-                                  color: const Color(0xFF15803D),
+                                  color: Colors.green.shade700,
                                 ),
                                 _ChipNivel(
                                   etiqueta: 'Máximo',
                                   valor: '$_stockMaximo',
-                                  color: const Color(0xFF1D4ED8),
+                                  color: Colors.blue.shade700,
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 8),
                             Text(
-                              'Stock en destino ($_sedeDestino): $stockDestino  |  '
-                              'Stock en origen ($_sedeOrigen): $stockOrigen (Excedente sobre mínimo: $excedenteSobreMinimo)',
+                              'Destino ($_sedeDestino): $stockDestino | '
+                              'Origen ($_sedeOrigen): $stockOrigen '
+                              '(Excedente mín.: $excedenteSobreMinimo)',
                               style: const TextStyle(
                                 fontSize: 12,
-                                color: Color(0xFF475569),
+                                color: Colors.black54,
                               ),
                             ),
                           ],
                         ),
                       ),
-
-                      const SizedBox(height: 20),
-
+                      const SizedBox(height: 18),
                       DropdownButtonFormField<String>(
-                        value: _sedeDestino,
+                        initialValue: _sedeDestino,
                         decoration: const InputDecoration(
-                          labelText: 'Sede solicitante (destino con escasez)',
-                          prefixIcon: Icon(Icons.local_hospital_outlined),
+                          labelText: 'Sede destino (con escasez) *',
                           border: OutlineInputBorder(),
                         ),
                         items: widget.sedesDisponibles
                             .map(
-                              (sede) => DropdownMenuItem(
-                                value: sede,
-                                child: Text(sede),
-                              ),
+                              (s) => DropdownMenuItem(value: s, child: Text(s)),
                             )
                             .toList(),
-                        onChanged: (valor) {
-                          if (valor == null) return;
-                          setState(() => _sedeDestino = valor);
+                        onChanged: (v) {
+                          if (v != null) setState(() => _sedeDestino = v);
                         },
                       ),
-
                       const SizedBox(height: 16),
-
                       DropdownButtonFormField<String>(
-                        value: _sedeOrigen,
+                        initialValue: _sedeOrigen,
                         decoration: const InputDecoration(
-                          labelText: 'Sede de origen (abastecedora)',
-                          prefixIcon: Icon(Icons.warehouse_outlined),
+                          labelText: 'Sede origen (abastecedora) *',
                           border: OutlineInputBorder(),
                         ),
                         items: widget.sedesDisponibles
                             .map(
-                              (sede) => DropdownMenuItem(
-                                value: sede,
-                                child: Text(sede),
-                              ),
+                              (s) => DropdownMenuItem(value: s, child: Text(s)),
                             )
                             .toList(),
-                        onChanged: (valor) {
-                          if (valor == null) return;
-                          setState(() => _sedeOrigen = valor);
+                        onChanged: (v) {
+                          if (v != null) setState(() => _sedeOrigen = v);
                         },
                       ),
-
                       const SizedBox(height: 16),
-
-                      DropdownButtonFormField<String>(
-                        value: _tipoSanguineo,
+                      DropdownButtonFormField<TipoSanguineo>(
+                        initialValue: _tipoSanguineo,
                         decoration: const InputDecoration(
-                          labelText: 'Tipo sanguíneo',
-                          prefixIcon: Icon(Icons.bloodtype_outlined),
+                          labelText: 'Tipo sanguíneo *',
                           border: OutlineInputBorder(),
                         ),
                         items: widget.tiposSanguineos
                             .map(
-                              (tipo) => DropdownMenuItem(
-                                value: tipo,
-                                child: Text(tipo),
+                              (t) => DropdownMenuItem(
+                                value: t,
+                                child: Text(t.etiqueta),
                               ),
                             )
                             .toList(),
-                        onChanged: (valor) {
-                          if (valor == null) return;
-                          setState(() {
-                            _tipoSanguineo = valor;
-                            _recalcularNivelesReferencia();
-                          });
+                        onChanged: (t) {
+                          if (t != null) {
+                            setState(() {
+                              _tipoSanguineo = t;
+                              _recalcularNivelesReferencia();
+                            });
+                          }
                         },
                       ),
-
                       const SizedBox(height: 16),
-
                       TextFormField(
-                        controller: _cantidadController,
+                        controller: _cantidadCtrl,
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
                         ],
                         decoration: const InputDecoration(
-                          labelText: 'Cantidad de unidades a solicitar',
-                          prefixIcon: Icon(Icons.numbers),
+                          labelText: 'Cantidad a solicitar *',
                           border: OutlineInputBorder(),
                         ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Ingrese la cantidad requerida';
+                        validator: (v) {
+                          final texto = (v ?? '').trim();
+                          if (texto.isEmpty) {
+                            return 'La cantidad es obligatoria';
                           }
-                          final int? numero = int.tryParse(value.trim());
-                          if (numero == null || numero <= 0) {
-                            return 'La cantidad debe ser mayor a 0';
+                          final n = int.tryParse(texto);
+                          if (n == null || n <= 0) {
+                            return 'Debe ser mayor a 0';
                           }
                           return null;
                         },
                       ),
-
                       const SizedBox(height: 14),
-
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.notifications_active_outlined,
-                            size: 18,
-                            color: Color(0xFF475569),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Al crear la solicitud se notificará automáticamente a $_sedeOrigen.',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF475569),
-                              ),
-                            ),
-                          ),
-                        ],
+                      Text(
+                        'Se notificará automáticamente a la sede de origen ($_sedeOrigen) al crear la solicitud.',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black54,
+                        ),
                       ),
-
                       const SizedBox(height: 18),
-
                       SizedBox(
-                        height: 48,
-                        child: ElevatedButton.icon(
+                        height: 46,
+                        child: FilledButton(
                           onPressed: _enviando ? null : _onSubmit,
-                          icon: _enviando
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.send_outlined),
-                          label: Text(
-                            _enviando
-                                ? 'Enviando solicitud...'
-                                : 'Solicitar traslado',
-                            style: const TextStyle(fontSize: 15),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFB91C1C),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
+                          style: FilledButton.styleFrom(backgroundColor: _rojo),
+                          child: Text(
+                            _enviando ? 'Enviando...' : 'Solicitar traslado',
                           ),
                         ),
                       ),
-
                       if (_mensajeEstado != null) ...[
                         const SizedBox(height: 16),
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: _esExito
-                                ? const Color(0xFFDCFCE7)
-                                : const Color(0xFFFEE2E2),
+                                ? Colors.green.shade50
+                                : Colors.red.shade50,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -468,8 +396,8 @@ class _SolicitudTrasladoScreenState extends State<SolicitudTrasladoScreen> {
                             style: TextStyle(
                               fontSize: 13,
                               color: _esExito
-                                  ? const Color(0xFF166534)
-                                  : const Color(0xFF991B1B),
+                                  ? Colors.green.shade800
+                                  : Colors.red.shade800,
                             ),
                           ),
                         ),
