@@ -80,11 +80,17 @@ class RepositorioUsuario {
     return filas.isEmpty ? null : Usuario.fromMap(filas.first);
   }
  
+  /// Usuario con sesion activa; null si nadie ha iniciado sesion
+  Usuario? usuarioActual;
+
   Usuario? autenticar(String nombreUsuario, String passwordPlano) {
     final u = buscarPorNombre(nombreUsuario);
-    if (u == null) return null;
-    return BCrypt.checkpw(passwordPlano, u.passwordHash) ? u : null;
+    final ok = u != null && BCrypt.checkpw(passwordPlano, u.passwordHash);
+    usuarioActual = ok ? u : null;
+    return usuarioActual;
   }
+
+  void cerrarSesion() => usuarioActual = null;
  
   List<Usuario> listar() {
     final filas = _db.select(
