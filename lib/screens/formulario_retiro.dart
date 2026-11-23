@@ -15,7 +15,8 @@ class FormularioRetiroPage extends StatefulWidget {
 class _FormularioRetiroPageState extends State<FormularioRetiroPage> {
   final _formKey = GlobalKey<FormState>();
   final _codigoCtrl = TextEditingController();
-
+  bool _guardando = false;
+  String? _motivoSeleccionado;
   String? _error;
   BolsaSangre? _bolsaEncontrada;
 
@@ -70,6 +71,58 @@ class _FormularioRetiroPageState extends State<FormularioRetiroPage> {
     setState(() {
       _bolsaEncontrada = encontrada;
     });
+  }
+
+  Future<void> _confirmarRetiro() async {
+    final bolsa = _bolsaEncontrada;
+    final motivo = _motivoSeleccionado;
+
+    if (_guardando || bolsa == null || motivo == null) return;
+
+    setState(() {
+      _guardando = true;
+      _error = null;
+    });
+
+    try {
+      await widget.repo.retirarUnidad(codigo: bolsa.codigo, motivo: motivo);
+
+      if (!mounted) return;
+
+      _codigoCtrl.clear();
+      _formKey.currentState?.reset();
+
+      setState(() {
+        _bolsaEncontrada = null;
+        _motivoSeleccionado = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unidad ${bolsa.codigo} retirada correctamente'),
+        ),
+      );
+    } on StateError catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = e.message.toString();
+        _bolsaEncontrada = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = 'No fue posible registrar el retiro.';
+        _bolsaEncontrada = null;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _guardando = false;
+        });
+      }
+    }
   }
 
   @override
@@ -142,6 +195,7 @@ class _FormularioRetiroPageState extends State<FormularioRetiroPage> {
 
                         onChanged: (valor) {
                           setState(() {
+                            _motivoSeleccionado = valor;
                             _bolsaEncontrada = null;
                             _error = null;
                           });
@@ -195,20 +249,19 @@ class _FormularioRetiroPageState extends State<FormularioRetiroPage> {
                           '${formatearFecha(_bolsaEncontrada!.fechaVencimiento)}',
                         ),
                         const SizedBox(height: 12),
-                        const Text(
-                          'Unidad localizada. Su estado de retiro '
-                          'se verificará al integrar la Task 5.2.',
+
+                        const Text('Unidad disponible para retiro.'),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _guardando ? null : _confirmarRetiro,
+                          icon: const Icon(Icons.check_circle_outline),
+                          label: Text(
+                            _guardando ? 'Registrando...' : 'Confirmar retiro',
+                          ),
                         ),
                       ],
 
                       const SizedBox(height: 24),
-                      const Text(
-                        'Esta pantalla todavía no registra el retiro. '
-                        'La actualización del inventario y el '
-                        'almacenamiento del motivo corresponden '
-                        'a la Task 5.2.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
                     ],
                   ),
                 ),

@@ -175,4 +175,69 @@ class RepositorioBolsa {
     );
     return filas.map((f) => StockSede.fromMap(f)).toList();
   }
+
+  Future<void> retirarUnidad({
+    required String codigo,
+    required String motivo,
+  }) async {
+    final clave = codigo.trim().toUpperCase();
+    final motivoLimpio = motivo.trim();
+
+    const motivosPermitidos = {
+      'Uso de unidad',
+      'Vencimiento',
+      'Descarte',
+      'Otro motivo operativo',
+    };
+
+    if (!BolsaSangre.codigoRegex.hasMatch(clave)) {
+      throw ArgumentError('Código de unidad inválido');
+    }
+
+    if (!motivosPermitidos.contains(motivoLimpio)) {
+      throw ArgumentError('Selecciona un motivo de retiro válido');
+    }
+
+    final filas = _db.select(
+      'SELECT estado, fecha_vencimiento FROM bolsas_sangre '
+      'WHERE codigo = ? COLLATE NOCASE',
+      [clave],
+    );
+
+    if (filas.isEmpty) {
+      throw StateError('La unidad no existe en el inventario');
+    }
+
+    if (filas.first['estado'] != 'DISPONIBLE') {
+      throw StateError('La unidad ya no está disponible para retiro');
+    }
+
+    final vencimiento = DateTime.parse(
+      filas.first['fecha_vencimiento'] as String,
+    );
+
+    if (!vencimiento.isAfter(fechaHoy()) && motivoLimpio != 'Vencimiento') {
+      throw StateError(
+        'La unidad está vencida. Debe retirarse por vencimiento.',
+      );
+    }
+
+    _db.execute(
+      "UPDATE bolsas_sangre "
+      "SET estado = 'RETIRADA', "
+      "motivo_retiro = ?, fecha_retiro = ? "
+      "WHERE codigo = ? COLLATE NOCASE "
+      "AND estado = 'DISPONIBLE'",
+      [motivoLimpio, DateTime.now().toIso8601String(), clave],
+    );
+
+    final cambios =
+        _db.select('SELECT changes() AS total').first['total'] as int;
+
+    if (cambios != 1) {
+      throw StateError('No fue posible completar el retiro');
+    }
+
+    await persistir();
+  }
 }
