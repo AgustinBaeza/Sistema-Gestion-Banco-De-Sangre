@@ -2,6 +2,7 @@ import "package:sqlite3/common.dart";
 import "../modelos/bolsa_sangre.dart";
 import "../modelos/stock_sede.dart";
 import "conexion.dart";
+import "../modelos/ordenamiento_vencimiento.dart";
  
 class RepositorioBolsa {
   static const _sqliteConstraintUnique = 2067;
@@ -148,4 +149,30 @@ class RepositorioBolsa {
       .select("SELECT DISTINCT sede FROM bolsas_sangre ORDER BY sede")
       .map((f) => f["sede"] as String)
       .toList();
+
+  // Trae las bolsas de la BD filtradas y ordenadas por vencimiento con su estado de alerta
+  List<UnidadOrdenada> listarOrdenadasPorVencimiento({
+    String? sede,
+    TipoSanguineo? tipo,
+    DateTime? fechaReferencia,
+    int diasAlerta = 7,
+    bool ascendente = true,
+  }) {
+    final filas = _db.select(
+      "SELECT id, codigo, tipo_sanguineo, sede, volumen_ml, "
+      "fecha_ingreso, fecha_vencimiento "
+      "FROM bolsas_sangre "
+      "WHERE (?1 IS NULL OR sede = ?1) "
+      "AND (?2 IS NULL OR tipo_sanguineo = ?2) "
+      "ORDER BY fecha_vencimiento ASC, codigo ASC",
+      [sede, tipo?.name],
+    );
+    final bolsas = filas.map((f) => BolsaSangre.fromMap(f)).toList();
+    return ordenarUnidadesPorVencimiento(
+      bolsas,
+      fechaReferencia: fechaReferencia,
+      diasAlerta: diasAlerta,
+      ascendente: ascendente,
+    );
+  }
 }
