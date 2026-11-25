@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../modelos/bolsa_sangre.dart';
 import '../basedatos/repositorio_bolsa.dart';
 import '../modelos/nivel_stock.dart';
+import '../modelos/ordenamiento_vencimiento.dart';
 
 class InventarioPage extends StatefulWidget {
   final RepositorioBolsa repo;
@@ -17,6 +18,10 @@ class _InventarioPageState extends State<InventarioPage> {
   String? sedeSeleccionada;
   TipoSanguineo? tipoSeleccionado;
 
+  // Estados para ordenar por vencimiento y mostrar u ocultar vencidas
+  bool ordenMasProximoPrimero = true;
+  bool mostrarVencidas = true;
+
   @override
   Widget build(BuildContext context) {
     final todasLasSedes = widget.repo.sedes();
@@ -25,6 +30,21 @@ class _InventarioPageState extends State<InventarioPage> {
       sede: sedeSeleccionada,
       tipo: tipoSeleccionado,
     );
+
+    final unidadesOrdenadas = widget.repo.listarOrdenadasPorVencimiento(
+      sede: sedeSeleccionada,
+      tipo: tipoSeleccionado,
+      ascendente: ordenMasProximoPrimero,
+    );
+    final unidadesVisibles = mostrarVencidas
+        ? unidadesOrdenadas
+        : unidadesOrdenadas.where((u) => u.esApta).toList();
+    final cantPorVencer = unidadesOrdenadas
+        .where((u) => u.estado == EstadoVencimiento.proximaAVencer)
+        .length;
+    final cantVencidas = unidadesOrdenadas
+        .where((u) => u.estado == EstadoVencimiento.vencida)
+        .length;
 
     // Si hay un filtro activo, mostramos solo esa sede/tipo. Si no, mostramos todo
     final sedesMostrar = sedeSeleccionada != null ? [sedeSeleccionada!] : todasLasSedes;
@@ -152,6 +172,116 @@ class _InventarioPageState extends State<InventarioPage> {
                           conNivel({NivelStock.abundante}).reversed.toList()),
                     ],
                   )),
+                  const SizedBox(height: 24),
+                  // Listado de bolsas ordenado por vencimiento con sus alertas
+                  _tarjeta(Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Control de vencimiento por unidad",
+                                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                children: [
+                                  _insigniaVencimiento(
+                                    "$cantPorVencer por vencer",
+                                    EstadoVencimiento.proximaAVencer,
+                                  ),
+                                  _insigniaVencimiento(
+                                    "$cantVencidas vencidas",
+                                    EstadoVencimiento.vencida,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              DropdownButton<bool>(
+                                value: ordenMasProximoPrimero,
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: true,
+                                    child: Text("Más próximas a vencer"),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: false,
+                                    child: Text("Más lejanas a vencer"),
+                                  ),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => ordenMasProximoPrimero = val);
+                                  }
+                                },
+                              ),
+                              FilterChip(
+                                label: const Text("Mostrar vencidas"),
+                                selected: mostrarVencidas,
+                                onSelected: (val) => setState(() => mostrarVencidas = val),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      if (unidadesVisibles.isEmpty)
+                        const Text(
+                          "No hay unidades para mostrar con los filtros seleccionados.",
+                          style: TextStyle(color: Colors.grey),
+                        )
+                      else
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: unidadesVisibles.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (_, i) {
+                            final u = unidadesVisibles[i];
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                              leading: CircleAvatar(
+                                backgroundColor: const Color(0xFFFEE2E2),
+                                child: Text(
+                                  u.bolsa.tipo.etiqueta,
+                                  style: const TextStyle(
+                                    color: Color(0xFFB91C1C),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                "${u.bolsa.codigo} · ${u.bolsa.sede}",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: u.esApta ? const Color(0xFF1E293B) : Colors.grey,
+                                ),
+                              ),
+                              subtitle: Text(
+                                "Vence: ${formatearFecha(u.bolsa.fechaVencimiento)} · ${u.detalleEstado}",
+                              ),
+                              trailing: _insigniaVencimiento(u.estado.etiqueta, u.estado),
+                            );
+                          },
+                        ),
+                    ],
+                  )),
                 ],
               ],
             ),
@@ -184,6 +314,46 @@ class _InventarioPageState extends State<InventarioPage> {
         decoration: BoxDecoration(color: n.fondo, borderRadius: BorderRadius.circular(12)),
         child: Text(texto, style: TextStyle(color: n.color, fontWeight: FontWeight.bold)),
       );
+
+  // Colores e iconos segun el estado de vencimiento de cada bolsa
+  Widget _insigniaVencimiento(String texto, EstadoVencimiento estado) {
+    final (Color colorTexto, Color colorFondo, IconData icono) = switch (estado) {
+      EstadoVencimiento.disponible => (
+          const Color(0xFF15803D),
+          const Color(0xFFDCFCE7),
+          Icons.check_circle_outline,
+        ),
+      EstadoVencimiento.proximaAVencer => (
+          const Color(0xFFB45309),
+          const Color(0xFFFEF3C7),
+          Icons.warning_amber_rounded,
+        ),
+      EstadoVencimiento.vencida => (
+          const Color(0xFFB91C1C),
+          const Color(0xFFFEE2E2),
+          Icons.block,
+        ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: colorFondo,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icono, size: 15, color: colorTexto),
+          const SizedBox(width: 5),
+          Text(
+            texto,
+            style: TextStyle(color: colorTexto, fontWeight: FontWeight.bold, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _seccion(String titulo, List<EvaluacionStock> celdas) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
