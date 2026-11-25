@@ -104,7 +104,6 @@ class RepositorioBolsa {
     // Se lee antes del await para no mezclarlo con otro insert
     final id = _db.lastInsertRowId;
  
-    // En web baja los cambios a IndexedDB; en escritorio no hace nada
     await persistir();
  
     return BolsaSangre(
@@ -128,36 +127,52 @@ class RepositorioBolsa {
   }
 
   /// Stock disponible para el inventario: cuenta las bolsas agrupadas por
-  /// sede y tipo sanguineo, excluyendo las unidades ya vencidas (RF-02).
-  List<StockSede> stockPorSedeYTipo() {
+  /// sede y tipo sanguineo, excluyendo las unidades ya vencidas.
+  List<StockSede> stockPorSedeYTipo({String? sede, TipoSanguineo? tipo}) {
     final filas = _db.select(
       "SELECT sede, tipo_sanguineo, "
       "CAST(COUNT(id) AS INTEGER) AS cantidad "
       "FROM bolsas_sangre "
-      "WHERE fecha_vencimiento > ? "
+      "WHERE fecha_vencimiento > ?1 "
+      "AND (?2 IS NULL OR sede = ?2) "
+      "AND (?3 IS NULL OR tipo_sanguineo = ?3) "
       "GROUP BY sede, tipo_sanguineo "
       "ORDER BY sede, tipo_sanguineo",
-      [fechaIso(fechaHoy())],
+      [fechaIso(fechaHoy()), sede, tipo?.name],
     );
     return filas.map((f) => StockSede.fromMap(f)).toList();
   }
 
-  // Trae todas las bolsas de la BD ordenadas por vencimiento y con su estado de alerta
+  /// Todas las sedes con bolsas registradas, aunque esten todas vencidas,
+  /// para que una sede sin unidades vigentes aparezca en falta
+  List<String> sedes() => _db
+      .select("SELECT DISTINCT sede FROM bolsas_sangre ORDER BY sede")
+      .map((f) => f["sede"] as String)
+      .toList();
+
+  // Trae las bolsas de la BD filtradas y ordenadas por vencimiento con su estado de alerta
   List<UnidadOrdenada> listarOrdenadasPorVencimiento({
+    String? sede,
+    TipoSanguineo? tipo,
     DateTime? fechaReferencia,
     int diasAlerta = 7,
+    bool ascendente = true,
   }) {
     final filas = _db.select(
       "SELECT id, codigo, tipo_sanguineo, sede, volumen_ml, "
       "fecha_ingreso, fecha_vencimiento "
-      "FROM bolsas_sangre ORDER BY fecha_vencimiento ASC, codigo ASC",
+      "FROM bolsas_sangre "
+      "WHERE (?1 IS NULL OR sede = ?1) "
+      "AND (?2 IS NULL OR tipo_sanguineo = ?2) "
+      "ORDER BY fecha_vencimiento ASC, codigo ASC",
+      [sede, tipo?.name],
     );
     final bolsas = filas.map((f) => BolsaSangre.fromMap(f)).toList();
     return ordenarUnidadesPorVencimiento(
       bolsas,
       fechaReferencia: fechaReferencia,
       diasAlerta: diasAlerta,
+      ascendente: ascendente,
     );
   }
-
 }
