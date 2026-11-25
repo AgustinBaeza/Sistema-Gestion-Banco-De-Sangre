@@ -20,7 +20,7 @@ void main() {
       final hoy = fechaHoy();
       final vence = sumarDias(hoy, 20);
 
-      // 10 bolsas O+ vigentes en Sede Norte (mínimo O+ = 6 => excedente = 4)
+      // 10 bolsas O+ vigentes en Sede Norte (mínimo = 5 => excedente = 5)
       for (int i = 1; i <= 10; i++) {
         await repoBolsa.crear(
           codigo: 'BS-NRT-${i.toString().padLeft(3, '0')}',
@@ -32,7 +32,7 @@ void main() {
         );
       }
 
-      // 2 bolsas O+ vigentes en Sede Central (escasez: bajo mínimo de 6)
+      // 2 bolsas O+ vigentes en Sede Central (escasez: bajo mínimo de 5)
       for (int i = 1; i <= 2; i++) {
         await repoBolsa.crear(
           codigo: 'BS-CNT-${i.toString().padLeft(3, '0')}',
@@ -45,20 +45,20 @@ void main() {
       }
     });
 
-    test('calcula stock mínimo, óptimo y máximo según tipo sanguíneo', () {
+    test('calcula stock mínimo, óptimo y máximo según NivelStock', () {
       final nivelesPositivo = repoTraslado.calcularNivelesStock(
         tipoSanguineo: TipoSanguineo.oPositivo,
       );
-      expect(nivelesPositivo.stockMinimo, 6);
-      expect(nivelesPositivo.stockOptimo, 15);
-      expect(nivelesPositivo.stockMaximo, 24);
+      expect(nivelesPositivo.stockMinimo, 5);
+      expect(nivelesPositivo.stockOptimo, 10);
+      expect(nivelesPositivo.stockMaximo, 15);
 
       final nivelesNegativo = repoTraslado.calcularNivelesStock(
         tipoSanguineo: TipoSanguineo.oNegativo,
       );
-      expect(nivelesNegativo.stockMinimo, 4);
+      expect(nivelesNegativo.stockMinimo, 5);
       expect(nivelesNegativo.stockOptimo, 10);
-      expect(nivelesNegativo.stockMaximo, 16);
+      expect(nivelesNegativo.stockMaximo, 15);
     });
 
     test('crea solicitud válida cuando hay excedente sobre stock mínimo', () async {
@@ -73,11 +73,14 @@ void main() {
       expect(solicitud.sedeOrigen, 'Sede Norte');
       expect(solicitud.sedeDestino, 'Sede Central');
       expect(solicitud.cantidad, 3);
+      expect(solicitud.stockMinimo, 5);
+      expect(solicitud.stockOptimo, 10);
+      expect(solicitud.stockMaximo, 15);
       expect(solicitud.notificacionEnviada, isTrue);
       expect(solicitud.estado, 'pendiente');
 
       // De 10 bolsas vigentes en Sede Norte, 3 quedan reservadas => 7 disponibles
-      // Excedente restante sobre mínimo (6) = 1
+      // Excedente restante sobre mínimo (5) = 2
       expect(
         repoTraslado.obtenerStockDisponibleOrigen(
           sedeOrigen: 'Sede Norte',
@@ -89,13 +92,13 @@ void main() {
     });
 
     test('rechaza solicitud si excede el stock excedente en origen', () async {
-      // Sede Norte tiene 10 bolsas O+ y mínimo 6 => máximo trasladable es 4
+      // Sede Norte tiene 10 bolsas O+ y mínimo 5 => máximo trasladable es 5
       expect(
         () => repoTraslado.crearSolicitudTraslado(
           sedeOrigen: 'Sede Norte',
           sedeDestino: 'Sede Central',
           tipoSanguineo: TipoSanguineo.oPositivo,
-          cantidad: 5,
+          cantidad: 6,
         ),
         throwsA(isA<StateError>()),
       );
@@ -138,14 +141,14 @@ void main() {
           home: SolicitudTrasladoPage(
             sedesDisponibles: ['Sede Central', 'Sede Norte'],
             stockActualPorSedeYTipo: {
-              'Sede Central|oPositivo': 2,
-              'Sede Norte|oPositivo': 10,
+              'Sede Central|aPositivo': 2,
+              'Sede Norte|aPositivo': 10, // mínimo 5 => excedente 5
             },
           ),
         ),
       );
 
-      await tester.enterText(find.byType(TextFormField), '6');
+      await tester.enterText(find.byType(TextFormField).first, '6');
       await tester.tap(find.byType(FilledButton));
       await tester.pumpAndSettle();
 
@@ -168,7 +171,7 @@ void main() {
             sedesDisponibles: const ['Sede Central', 'Sede Norte'],
             stockActualPorSedeYTipo: const {
               'Sede Central|aPositivo': 2,
-              'Sede Norte|aPositivo': 12, // mínimo 6 => excedente 6
+              'Sede Norte|aPositivo': 12, // mínimo 5 => excedente 7
             },
             onEnviarSolicitud: (datos) async {
               datosRecibidos = datos;

@@ -1,12 +1,12 @@
 import 'package:sqlite3/common.dart';
 import '../modelos/bolsa_sangre.dart';
+import '../modelos/nivel_stock.dart';
 import '../modelos/solicitud_traslado.dart';
 import 'conexion.dart';
 
 class RepositorioTraslado {
   late final CommonDatabase _db;
 
-  /// Inicializa la base de datos y crea la tabla de solicitudes de traslado si no existe
   void init(CommonDatabase db) {
     _db = db;
 
@@ -29,27 +29,26 @@ class RepositorioTraslado {
     """);
   }
 
-  /// Calcula los niveles de stock mínimo, óptimo y máximo según tipo sanguíneo
+  /// Umbrales alineados con `NivelStock` de US4:
+  /// - Mínimo seguro para no caer en stock bajo: NivelStock.maxBajo + 1 (5)
+  /// - Óptimo de referencia: punto medio entre mínimo y abundante
+  /// - Máximo de referencia: NivelStock.minAbundante (15)
   NivelesStockReferencia calcularNivelesStock({
     required TipoSanguineo tipoSanguineo,
     int factorCapacidadSede = 1,
   }) {
     final int factor = factorCapacidadSede < 1 ? 1 : factorCapacidadSede;
-    final bool esRhNegativo = tipoSanguineo.name.endsWith('Negativo');
-
-    final int minimoBase = esRhNegativo ? 4 : 6;
-    final int optimoBase = (minimoBase * 2.5).round();
-    final int maximoBase = minimoBase * 4;
+    final int minimo = (NivelStock.maxBajo + 1) * factor;
+    final int maximo = NivelStock.minAbundante * factor;
+    final int optimo = ((minimo + maximo) / 2).round();
 
     return NivelesStockReferencia(
-      stockMinimo: minimoBase * factor,
-      stockOptimo: optimoBase * factor,
-      stockMaximo: maximoBase * factor,
+      stockMinimo: minimo,
+      stockOptimo: optimo,
+      stockMaximo: maximo,
     );
   }
 
-  /// Consulta el stock vigente en `bolsas_sangre` (fecha_vencimiento > hoy)
-  /// descontando solicitudes pendientes ya comprometidas desde esa sede origen
   int obtenerStockDisponibleOrigen({
     required String sedeOrigen,
     required TipoSanguineo tipoSanguineo,
@@ -93,26 +92,19 @@ class RepositorioTraslado {
     return (totalVigentes - reservadas).clamp(0, totalVigentes);
   }
 
-  /// Devuelve un mapa listo para alimentar `SolicitudTrasladoPage.stockActualPorSedeYTipo`
-  /// a partir de las bolsas vigentes en la base de datos
   Map<String, int> mapaStockDisponiblePorSedeYTipo(List<String> sedes) {
     final mapa = <String, int>{};
     for (final sede in sedes) {
       for (final tipo in TipoSanguineo.values) {
-        final disponible = obtenerStockDisponibleOrigen(
+        mapa['$sede|${tipo.name}'] = obtenerStockDisponibleOrigen(
           sedeOrigen: sede,
           tipoSanguineo: tipo,
         );
-        mapa['$sede|${tipo.name}'] = disponible;
       }
     }
     return mapa;
   }
 
-  /// Valida y crea una solicitud de traslado verificando:
-  /// 1) Datos válidos y sedes distintas
-  /// 2) Cálculo de stock mínimo, óptimo y máximo
-  /// 3) Excedente disponible en origen por encima del stock mínimo
   Future<SolicitudTraslado> crearSolicitudTraslado({
     required String sedeOrigen,
     required String sedeDestino,
@@ -125,11 +117,15 @@ class RepositorioTraslado {
     final String destino = sedeDestino.trim();
 
     if (origen.isEmpty || destino.isEmpty) {
-      throw ArgumentError('La sede de origen y la sede de destino son obligatorias.');
+      throw ArgumentError(
+        'La sede de origen y la sede de destino son obligatorias.',
+      );
     }
 
     if (origen.toLowerCase() == destino.toLowerCase()) {
-      throw ArgumentError('La sede de origen y la sede de destino deben ser distintas.');
+      throw ArgumentError(
+        'La sede de origen y la sede de destino deben ser distintas.',
+      );
     }
 
     if (cantidad <= 0) {
@@ -187,9 +183,7 @@ class RepositorioTraslado {
       ],
     );
 
-    // Se lee antes del await para no mezclarlo con otro insert
     final int nuevoId = _db.lastInsertRowId;
-
     await persistir();
 
     return SolicitudTraslado(
@@ -207,7 +201,6 @@ class RepositorioTraslado {
     );
   }
 
-  /// Lista todas las solicitudes de traslado registradas
   List<SolicitudTraslado> listarSolicitudes() {
     final filas = _db.select(
       'SELECT * FROM solicitudes_traslado ORDER BY id DESC',
