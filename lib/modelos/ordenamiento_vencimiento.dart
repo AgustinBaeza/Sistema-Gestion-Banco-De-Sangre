@@ -24,7 +24,7 @@ class UnidadOrdenada {
     required this.detalleEstado,
   });
 
-  // Calcula cuantos dias quedan y revisa si la bolsa esta disponible, por vencer o ya vencida
+  // Calcula cuantos dias faltan para que venza y clasifica la bolsa
   factory UnidadOrdenada.evaluar(
     BolsaSangre bolsa, {
     DateTime? fechaReferencia,
@@ -35,7 +35,7 @@ class UnidadOrdenada {
     final vence = soloFecha(bolsa.fechaVencimiento);
     final ingreso = soloFecha(bolsa.fechaIngreso);
 
-    // Si vienen datos raros, como volumen <= 0 o fechas al reves, la marcamos como no apta para que no se caiga
+    // Si vienen datos invalidos (volumen <= 0 o fechas cruzadas) queda como no apta
     if (bolsa.volumenMl <= 0 || !vence.isAfter(ingreso)) {
       return UnidadOrdenada(
         bolsa: bolsa,
@@ -48,7 +48,7 @@ class UnidadOrdenada {
 
     final diferenciaDias = vence.difference(ref).inDays;
 
-    // Si da 0 o negativo es porque ya vencio; dejamos diasRestantes en 0 para no mostrar numeros negativos
+    // Si da 0 o negativo ya vencio; dejamos diasRestantes en 0 para no mostrar negativos
     if (diferenciaDias <= 0) {
       final diasPasados = diferenciaDias.abs();
       final textoVencida = diasPasados == 0
@@ -85,12 +85,12 @@ class UnidadOrdenada {
   }
 }
 
-// Ordena las bolsas por fecha de vencimiento (primero las que vencen antes).
-// Las vencidas o no aptas quedan al final para no mezclarlas con las disponibles.
+// Ordena las bolsas por vencimiento y manda las vencidas al final
 List<UnidadOrdenada> ordenarUnidadesPorVencimiento(
   List<BolsaSangre> bolsas, {
   DateTime? fechaReferencia,
   int diasAlerta = 7,
+  bool ascendente = true,
 }) {
   final evaluadas = bolsas
       .map(
@@ -103,15 +103,15 @@ List<UnidadOrdenada> ordenarUnidadesPorVencimiento(
       .toList();
 
   evaluadas.sort((a, b) {
-    // Las aptas siempre van arriba y las vencidas al final
+    // Las aptas van primero y las vencidas quedan al final
     if (a.esApta != b.esApta) {
       return a.esApta ? -1 : 1;
     }
 
-    // Si ambas son aptas o ambas vencidas, ordenamos por la fecha mas cercana
+    // Ordenamos por fecha de vencimiento
     final cmpFecha = soloFecha(a.bolsa.fechaVencimiento)
         .compareTo(soloFecha(b.bolsa.fechaVencimiento));
-    if (cmpFecha != 0) return cmpFecha;
+    if (cmpFecha != 0) return ascendente ? cmpFecha : -cmpFecha;
 
     // Si vencen el mismo dia, desempatamos por codigo
     return a.bolsa.codigo.compareTo(b.bolsa.codigo);
