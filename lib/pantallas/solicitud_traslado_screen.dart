@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../modelos/bolsa_sangre.dart';
+import '../modelos/nivel_stock.dart';
 
 class DatosSolicitudTraslado {
   final String sedeOrigen;
@@ -69,9 +70,9 @@ class _SolicitudTrasladoPageState extends State<SolicitudTrasladoPage> {
   late String _sedeOrigen;
   late TipoSanguineo _tipoSanguineo;
 
-  int _stockMinimo = 4;
-  int _stockOptimo = 10;
-  int _stockMaximo = 16;
+  late int _stockMinimo;
+  late int _stockOptimo;
+  late int _stockMaximo;
 
   bool _enviando = false;
   String? _mensajeEstado;
@@ -95,11 +96,9 @@ class _SolicitudTrasladoPageState extends State<SolicitudTrasladoPage> {
   }
 
   void _recalcularNivelesReferencia() {
-    final bool esRhNegativo = _tipoSanguineo.name.endsWith('Negativo');
-    final int baseMin = esRhNegativo ? 4 : 6;
-    _stockMinimo = baseMin;
-    _stockOptimo = (baseMin * 2.5).round();
-    _stockMaximo = baseMin * 4;
+    _stockMinimo = NivelStock.maxBajo + 1;
+    _stockMaximo = NivelStock.minAbundante;
+    _stockOptimo = ((_stockMinimo + _stockMaximo) / 2).round();
   }
 
   int _obtenerStockSede(String sede) {

@@ -62,7 +62,20 @@ class _InventarioPageState extends State<InventarioPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F9),
-      appBar: AppBar(title: const Text("Evaluación de stock")),
+      appBar: AppBar(
+        title: const Text("Evaluación de stock"),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.pushNamed(context, "/traslados"),
+            icon: const Icon(Icons.swap_horiz, color: Color(0xFFB91C1C)),
+            label: const Text(
+              "Solicitar traslado",
+              style: TextStyle(color: Color(0xFFB91C1C), fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
