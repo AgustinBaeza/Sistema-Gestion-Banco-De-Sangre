@@ -103,7 +103,6 @@ class RepositorioBolsa {
     // Se lee antes del await para no mezclarlo con otro insert
     final id = _db.lastInsertRowId;
  
-    // En web baja los cambios a IndexedDB; en escritorio no hace nada
     await persistir();
  
     return BolsaSangre(
@@ -127,17 +126,26 @@ class RepositorioBolsa {
   }
 
   /// Stock disponible para el inventario: cuenta las bolsas agrupadas por
-  /// sede y tipo sanguineo, excluyendo las unidades ya vencidas (RF-02).
-  List<StockSede> stockPorSedeYTipo() {
+  /// sede y tipo sanguineo, excluyendo las unidades ya vencidas.
+  List<StockSede> stockPorSedeYTipo({String? sede, TipoSanguineo? tipo}) {
     final filas = _db.select(
       "SELECT sede, tipo_sanguineo, "
       "CAST(COUNT(id) AS INTEGER) AS cantidad "
       "FROM bolsas_sangre "
-      "WHERE fecha_vencimiento > ? "
+      "WHERE fecha_vencimiento > ?1 "
+      "AND (?2 IS NULL OR sede = ?2) "
+      "AND (?3 IS NULL OR tipo_sanguineo = ?3) "
       "GROUP BY sede, tipo_sanguineo "
       "ORDER BY sede, tipo_sanguineo",
-      [fechaIso(fechaHoy())],
+      [fechaIso(fechaHoy()), sede, tipo?.name],
     );
     return filas.map((f) => StockSede.fromMap(f)).toList();
   }
+
+  /// Todas las sedes con bolsas registradas, aunque esten todas vencidas,
+  /// para que una sede sin unidades vigentes aparezca en falta
+  List<String> sedes() => _db
+      .select("SELECT DISTINCT sede FROM bolsas_sangre ORDER BY sede")
+      .map((f) => f["sede"] as String)
+      .toList();
 }
