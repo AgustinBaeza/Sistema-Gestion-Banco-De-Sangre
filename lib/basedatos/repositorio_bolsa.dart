@@ -1,20 +1,19 @@
 import "package:sqlite3/common.dart";
 import "../modelos/bolsa_sangre.dart";
 import "../modelos/stock_sede.dart";
-import "conexion.dart";
 import "../modelos/ordenamiento_vencimiento.dart";
- 
+import "conexion.dart";
 class RepositorioBolsa {
   static const _sqliteConstraintUnique = 2067;
- 
+
   late final CommonDatabase _db;
- 
+
   /// Recibe una base de datos ya abierta y crea la tabla si no existe
   void init(CommonDatabase db) {
     _db = db;
- 
+
     final tipos = TipoSanguineo.values.map((t) => "'${t.name}'").join(", ");
- 
+
     _db.execute("""
       CREATE TABLE IF NOT EXISTS bolsas_sangre (
         id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,21 +21,48 @@ class RepositorioBolsa {
         tipo_sanguineo    TEXT NOT NULL CHECK (tipo_sanguineo IN ($tipos)),
         sede              TEXT NOT NULL,
         volumen_ml        INTEGER NOT NULL CHECK (volumen_ml > 0),
-        fecha_ingreso     TEXT NOT NULL,
-        fecha_vencimiento TEXT NOT NULL CHECK (fecha_vencimiento > fecha_ingreso)
-      )
+        fecha_ingreso TEXT NOT NULL,
+        fecha_vencimiento TEXT NOT NULL
+          CHECK (fecha_vencimiento > fecha_ingreso),
+
+        estado TEXT NOT NULL DEFAULT 'DISPONIBLE'
+          CHECK (estado IN (
+            'DISPONIBLE', 'RETIRADA',
+            'EN_TRANSITO', 'EN_REVISION'
+          )),
+
+        motivo_retiro TEXT,
+        fecha_retiro TEXT
+        )
     """);
 
     // Migracion: las bases creadas antes de la sede no tienen la columna, idealmente eliminar la migracion cuando ya no haya bases de datos antiguas
     final columnas = _db.select("PRAGMA table_info(bolsas_sangre)");
-    if (!columnas.any((c) => c["name"] == "sede")) {
+
+    if (!columnas.any((c) => c["name"] == "estado")) {
       _db.execute(
         "ALTER TABLE bolsas_sangre "
-        "ADD COLUMN sede TEXT NOT NULL DEFAULT 'Desconocida'",
+        "ADD COLUMN estado TEXT NOT NULL DEFAULT 'DISPONIBLE' "
+        "CHECK (estado IN ('DISPONIBLE', 'RETIRADA', "
+        "'EN_TRANSITO', 'EN_REVISION'))",
+      );
+    }
+
+    if (!columnas.any((c) => c["name"] == "motivo_retiro")) {
+      _db.execute(
+        "ALTER TABLE bolsas_sangre "
+        "ADD COLUMN motivo_retiro TEXT",
+      );
+    }
+
+    if (!columnas.any((c) => c["name"] == "fecha_retiro")) {
+      _db.execute(
+        "ALTER TABLE bolsas_sangre "
+        "ADD COLUMN fecha_retiro TEXT",
       );
     }
   }
- 
+
   Future<BolsaSangre> crear({
     required String codigo,
     required TipoSanguineo tipo,
@@ -85,14 +111,21 @@ class RepositorioBolsa {
         "desde el ingreso",
       );
     }
- 
+
     try {
       _db.execute(
         "INSERT INTO bolsas_sangre "
         "(codigo, tipo_sanguineo, sede, volumen_ml, fecha_ingreso, "
         "fecha_vencimiento) "
         "VALUES (?, ?, ?, ?, ?, ?)",
-        [clave, tipo.name, sedeLimpia, volumenMl, fechaIso(ingreso), fechaIso(vence)],
+        [
+          clave,
+          tipo.name,
+          sedeLimpia,
+          volumenMl,
+          fechaIso(ingreso),
+          fechaIso(vence),
+        ],
       );
     } on SqliteException catch (e) {
       if (e.extendedResultCode == _sqliteConstraintUnique) {
@@ -100,12 +133,13 @@ class RepositorioBolsa {
       }
       rethrow;
     }
- 
+
     // Se lee antes del await para no mezclarlo con otro insert
     final id = _db.lastInsertRowId;
- 
+
+    // En web baja los cambios a IndexedDB; en escritorio no hace nada
     await persistir();
- 
+
     return BolsaSangre(
       id: id,
       codigo: clave,
@@ -120,7 +154,8 @@ class RepositorioBolsa {
   List<BolsaSangre> listar() {
     final filas = _db.select(
       "SELECT id, codigo, tipo_sanguineo, sede, volumen_ml, "
-      "fecha_ingreso, fecha_vencimiento "
+      "fecha_ingreso, fecha_vencimiento, estado, "
+      "motivo_retiro, fecha_retiro "
       "FROM bolsas_sangre ORDER BY id DESC",
     );
     return filas.map((f) => BolsaSangre.fromMap(f)).toList();
@@ -133,9 +168,12 @@ class RepositorioBolsa {
       "SELECT sede, tipo_sanguineo, "
       "CAST(COUNT(id) AS INTEGER) AS cantidad "
       "FROM bolsas_sangre "
+
       "WHERE fecha_vencimiento > ?1 "
+      "AND estado = 'DISPONIBLE' "
       "AND (?2 IS NULL OR sede = ?2) "
       "AND (?3 IS NULL OR tipo_sanguineo = ?3) "
+  
       "GROUP BY sede, tipo_sanguineo "
       "ORDER BY sede, tipo_sanguineo",
       [fechaIso(fechaHoy()), sede, tipo?.name],
@@ -143,14 +181,80 @@ class RepositorioBolsa {
     return filas.map((f) => StockSede.fromMap(f)).toList();
   }
 
-  /// Todas las sedes con bolsas registradas, aunque esten todas vencidas,
-  /// para que una sede sin unidades vigentes aparezca en falta
+
+  Future<void> retirarUnidad({
+    required String codigo,
+    required String motivo,
+  }) async {
+    final clave = codigo.trim().toUpperCase();
+    final motivoLimpio = motivo.trim();
+
+    const motivosPermitidos = {
+      'Uso de unidad',
+      'Vencimiento',
+      'Descarte',
+      'Otro motivo operativo',
+    };
+
+    if (!BolsaSangre.codigoRegex.hasMatch(clave)) {
+      throw ArgumentError('Código de unidad inválido');
+    }
+
+    if (!motivosPermitidos.contains(motivoLimpio)) {
+      throw ArgumentError('Selecciona un motivo de retiro válido');
+    }
+
+    final filas = _db.select(
+      'SELECT estado, fecha_vencimiento FROM bolsas_sangre '
+      'WHERE codigo = ? COLLATE NOCASE',
+      [clave],
+    );
+
+    if (filas.isEmpty) {
+      throw StateError('La unidad no existe en el inventario');
+    }
+
+    if (filas.first['estado'] != 'DISPONIBLE') {
+      throw StateError('La unidad ya no está disponible para retiro');
+    }
+
+    final vencimiento = DateTime.parse(
+      filas.first['fecha_vencimiento'] as String,
+    );
+
+    if (!vencimiento.isAfter(fechaHoy()) &&
+        motivoLimpio != 'Vencimiento') {
+      throw StateError(
+        'La unidad está vencida. Debe retirarse por vencimiento.',
+      );
+    }
+
+    _db.execute(
+      "UPDATE bolsas_sangre "
+      "SET estado = 'RETIRADA', "
+      "motivo_retiro = ?, fecha_retiro = ? "
+      "WHERE codigo = ? COLLATE NOCASE "
+      "AND estado = 'DISPONIBLE'",
+      [motivoLimpio, DateTime.now().toIso8601String(), clave],
+    );
+
+    final cambios =
+        _db.select('SELECT changes() AS total').first['total'] as int;
+
+    if (cambios != 1) {
+      throw StateError('No fue posible completar el retiro');
+    }
+
+    await persistir();
+  }
+
+  /// Obtiene todas las sedes con bolsas registradas.
   List<String> sedes() => _db
       .select("SELECT DISTINCT sede FROM bolsas_sangre ORDER BY sede")
       .map((f) => f["sede"] as String)
       .toList();
 
-  // Trae las bolsas de la BD filtradas y ordenadas por vencimiento con su estado de alerta
+  /// Obtiene las unidades disponibles ordenadas por vencimiento.
   List<UnidadOrdenada> listarOrdenadasPorVencimiento({
     String? sede,
     TipoSanguineo? tipo,
@@ -160,14 +264,19 @@ class RepositorioBolsa {
   }) {
     final filas = _db.select(
       "SELECT id, codigo, tipo_sanguineo, sede, volumen_ml, "
-      "fecha_ingreso, fecha_vencimiento "
+      "fecha_ingreso, fecha_vencimiento, estado, "
+      "motivo_retiro, fecha_retiro "
       "FROM bolsas_sangre "
-      "WHERE (?1 IS NULL OR sede = ?1) "
+      "WHERE estado = 'DISPONIBLE' "
+      "AND (?1 IS NULL OR sede = ?1) "
       "AND (?2 IS NULL OR tipo_sanguineo = ?2) "
       "ORDER BY fecha_vencimiento ASC, codigo ASC",
       [sede, tipo?.name],
     );
-    final bolsas = filas.map((f) => BolsaSangre.fromMap(f)).toList();
+
+    final bolsas =
+        filas.map((f) => BolsaSangre.fromMap(f)).toList();
+
     return ordenarUnidadesPorVencimiento(
       bolsas,
       fechaReferencia: fechaReferencia,
@@ -176,3 +285,4 @@ class RepositorioBolsa {
     );
   }
 }
+

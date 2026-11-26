@@ -183,6 +183,13 @@ class _FormularioBolsaPageState extends State<FormularioBolsaPage> {
         title: const Text("Ingreso de bolsa de sangre"),
         actions: [
           IconButton(
+            icon: const Icon(Icons.remove_circle_outline),
+            tooltip: 'Retirar unidad',
+            onPressed: () {
+              Navigator.of(context).pushNamed('/retiro');
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.inventory_2_outlined),
             tooltip: "Ver inventario",
             onPressed: () {

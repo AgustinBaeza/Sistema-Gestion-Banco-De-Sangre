@@ -6,21 +6,22 @@ import "basedatos/repositorio_usuario.dart";
 import "pantallas/formulario_bolsa.dart";
 import "pantallas/inventario.dart";
 import "screens/login_screen.dart";
- 
+import "screens/formulario_retiro.dart";
+
 final repoUsuario = RepositorioUsuario();
 final repoBolsa = RepositorioBolsa();
- 
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
- 
+
   final db = await abrirBaseDatos();
   repoUsuario.init(db);
   repoBolsa.init(db);
   await repoUsuario.sembrarUsuarios();
- 
+
   runApp(const MyApp());
 }
- 
+
 /// Arma la pantalla segun la ruta. Sin sesion activa cualquier ruta
 /// lleva al login, asi no se entra al formulario escribiendo la URL.
 Route<void> generarRuta(RouteSettings settings) {
@@ -41,15 +42,23 @@ Route<void> generarRuta(RouteSettings settings) {
       builder: (_) => InventarioPage(repo: repoBolsa),
     );
   }
+
+  if (settings.name == "/retiro" && (logueado || kDebugMode)) {
+    return MaterialPageRoute(
+      settings: settings,
+      builder: (_) => FormularioRetiroPage(repo: repoBolsa),
+    );
+  }
+
   return MaterialPageRoute(
     settings: const RouteSettings(name: "/"),
     builder: (_) => LoginScreen(repo: repoUsuario),
   );
 }
- 
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
- 
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
