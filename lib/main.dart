@@ -38,8 +38,8 @@ Route<void> generarRuta(RouteSettings settings) {
   if (settings.name == "/inventario" && kDebugMode) {
     return MaterialPageRoute(
       settings: settings,
-      // Se arma con las bolsas de la db, agrupadas por sede y tipo
-      builder: (_) => InventarioPage(filas: repoBolsa.stockPorSedeYTipo()),
+      // La pantalla consulta el stock al repositorio segun los filtros
+      builder: (_) => InventarioPage(repo: repoBolsa),
     );
   }
 
